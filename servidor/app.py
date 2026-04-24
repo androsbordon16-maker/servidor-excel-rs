@@ -34,6 +34,9 @@ FOTO_ZONAS = {
     'TEMP. TABLERO AC': [(9,25,1,4),(10,25,6,9),(28,44,1,4),(46,62,1,4)],
 }
 
+# Encabezado — zona de logo/header que NO se debe tocar
+HEADER_ZONA_FILAS = (1, 6)
+
 def safe_write(ws, coord, value, merge_map):
     real = merge_map.get(coord, coord)
     try:
@@ -50,6 +53,18 @@ def get_merge_map(ws):
             for cell in row:
                 m[cell.coordinate] = top
     return m
+
+def limpiar_fotos_contenido(ws):
+    """Elimina todas las imágenes excepto el logo/header (filas 1-6)"""
+    imgs_a_mantener = []
+    for img in ws._images:
+        try:
+            a = img.anchor
+            if hasattr(a, '_from') and a._from.row < HEADER_ZONA_FILAS[1]:
+                imgs_a_mantener.append(img)
+        except:
+            imgs_a_mantener.append(img)
+    ws._images = imgs_a_mantener
 
 def insertar_foto(ws, url, zona):
     try:
@@ -92,10 +107,13 @@ def generar():
         enc = data.get('encabezado', {})
         fotos_por_seccion = data.get('fotos', {})
 
-        # Descargar template
         resp = requests.get(TEMPLATE_URL, timeout=30)
         template_bytes = io.BytesIO(resp.content)
         wb = load_workbook(template_bytes)
+
+        # Limpiar fotos de contenido en TODAS las hojas (mantener solo header)
+        for sheet_name in wb.sheetnames:
+            limpiar_fotos_contenido(wb[sheet_name])
 
         # === DC PLANTA ===
         ws = wb['DC PLANTA']
@@ -126,7 +144,6 @@ def generar():
         if d.get('notas_dc'):
             safe_write(ws, 'A56', f'NOTAS: {d["notas_dc"]}', mm)
 
-        # Reapriete — recuadros azules
         rect_rows = d.get('rect_rows', [])
         filas_rect = [38, 41, 44, 47, 50]
         for i, row in enumerate(rect_rows[:5]):
@@ -135,7 +152,6 @@ def generar():
             if row.get('tl'):
                 safe_write(ws, f'B{fr+1}', _n(row.get('tl')), mm)
             safe_write(ws, f'C{fr+1}', row.get('el',''), mm)
-            # FIX: siempre escribir recuadros azules aunque estén vacíos
             rect_izq = row.get('rect_izq','')
             amp_izq = row.get('amp_izq','')
             safe_write(ws, f'D{fr}', f'RECT.= {rect_izq}  AMP= {amp_izq}', mm)
@@ -160,7 +176,6 @@ def generar():
         safe_write(ws3, 'H29', _n(t.get('if1')), mm3)
         safe_write(ws3, 'H30', _n(t.get('if2')), mm3)
         safe_write(ws3, 'H31', _n(t.get('if3')), mm3)
-        # FIX: voltajes fijos
         safe_write(ws3, 'H32', _n(t.get('vf12')), mm3)
         safe_write(ws3, 'H33', _n(t.get('vf13')), mm3)
         safe_write(ws3, 'H34', _n(t.get('vf23')), mm3)
@@ -193,12 +208,9 @@ def generar():
         # === TEMP.BATERIAS ===
         ws5 = wb['TEMP.BATERIAS']
         mm5 = get_merge_map(ws5)
-        gabinetes = d.get('gabinetes', [])
-        for i, gab in enumerate(gabinetes[:4]):
-            r = 38 + i
-            # FIX: escribir nombre completo del gabinete
-            safe_write(ws5, f'F{r}', gab.get('nombre',''), mm5)
-            safe_write(ws5, f'G{r}', gab.get('tierra',''), mm5)
+        for i, gab in enumerate(d.get('gabinetes', [])[:4]):
+            safe_write(ws5, f'F{38+i}', gab.get('nombre',''), mm5)
+            safe_write(ws5, f'G{38+i}', gab.get('tierra',''), mm5)
         safe_write(ws5, 'F34', f'ALARMAS PRESENTES:{d.get("tb_alarmas","NINGUNA")}', mm5)
         if d.get('tb_notas'):
             safe_write(ws5, 'F28', f'NOTAS: {d["tb_notas"]}', mm5)
@@ -206,9 +218,8 @@ def generar():
         # === TEMP.DISTRIBUCION ===
         ws6 = wb['TEMP.DISTRIBUCION']
         mm6 = get_merge_map(ws6)
-        distribuciones = d.get('distribuciones', [])
         dist_coords = [('F38','G38'),('F39','G39'),('H38','I38'),('H39','I39')]
-        for i, dist in enumerate(distribuciones[:4]):
+        for i, dist in enumerate(d.get('distribuciones', [])[:4]):
             nc, vc = dist_coords[i]
             safe_write(ws6, nc, dist.get('nombre',''), mm6)
             safe_write(ws6, vc, dist.get('estado',''), mm6)
