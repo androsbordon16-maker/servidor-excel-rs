@@ -5,7 +5,6 @@ from openpyxl.drawing.image import Image as XLImage
 import requests
 import io
 import os
-import tempfile
 from PIL import Image as PILImage
 
 app = Flask(__name__)
@@ -24,7 +23,6 @@ SECCION_MAP = {
     'Temp Tablero AC': 'TEMP. TABLERO AC',
 }
 
-# Zonas de fotos por hoja (fila_inicio, fila_fin, col_inicio, col_fin) — 1-indexed
 FOTO_ZONAS = {
     'DC PLANTA': [(11,26,1,5)],
     'DIST. Y RECT.': [(11,27,1,4),(11,27,4,8),(11,27,8,11),(33,49,1,4),(33,49,5,10)],
@@ -55,15 +53,12 @@ def get_merge_map(ws):
 
 def insertar_foto(ws, url, zona):
     try:
-        resp = requests.get(url, timeout=15)
+        resp = requests.get(url, timeout=20)
         if resp.status_code != 200:
             return
         img_data = io.BytesIO(resp.content)
         pil_img = PILImage.open(img_data)
-        # Comprimir si es muy grande
-        max_size = (800, 600)
-        pil_img.thumbnail(max_size, PILImage.LANCZOS)
-        # Convertir a RGB si es RGBA
+        pil_img.thumbnail((800, 600), PILImage.LANCZOS)
         if pil_img.mode in ('RGBA', 'LA', 'P'):
             pil_img = pil_img.convert('RGB')
         out = io.BytesIO()
@@ -71,22 +66,23 @@ def insertar_foto(ws, url, zona):
         out.seek(0)
         xl_img = XLImage(out)
         r1, r2, c1, c2 = zona
-        # Calcular tamaño en pixeles basado en zona
         from openpyxl.utils import get_column_letter
-        col_widths = sum(ws.column_dimensions.get(get_column_letter(c), None) and
-                        (ws.column_dimensions[get_column_letter(c)].width or 8) or 8
-                        for c in range(c1, c2+1))
-        row_heights = sum(ws.row_dimensions.get(r, None) and
-                         (ws.row_dimensions[r].height or 15) or 15
-                         for r in range(r1, r2+1))
+        col_widths = sum((ws.column_dimensions[get_column_letter(c)].width or 8) if get_column_letter(c) in ws.column_dimensions else 8 for c in range(c1, c2+1))
+        row_heights = sum((ws.row_dimensions[r].height or 15) if r in ws.row_dimensions else 15 for r in range(r1, r2+1))
         xl_img.width = int(col_widths * 7.5)
         xl_img.height = int(row_heights * 1.33)
-        from openpyxl.utils import get_column_letter
-        anchor = f"{get_column_letter(c1)}{r1}"
-        xl_img.anchor = anchor
+        xl_img.anchor = f"{get_column_letter(c1)}{r1}"
         ws.add_image(xl_img)
     except Exception as e:
         print(f"Error foto {url}: {e}")
+
+def _n(val):
+    if val is None or val == '':
+        return None
+    try:
+        return float(val)
+    except:
+        return val
 
 @app.route('/generar', methods=['POST'])
 def generar():
@@ -97,18 +93,13 @@ def generar():
         fotos_por_seccion = data.get('fotos', {})
 
         # Descargar template
-        if TEMPLATE_URL:
-            resp = requests.get(TEMPLATE_URL, timeout=30)
-            template_bytes = io.BytesIO(resp.content)
-        else:
-            template_bytes = '/tmp/template.xlsx'
-
+        resp = requests.get(TEMPLATE_URL, timeout=30)
+        template_bytes = io.BytesIO(resp.content)
         wb = load_workbook(template_bytes)
 
         # === DC PLANTA ===
         ws = wb['DC PLANTA']
         mm = get_merge_map(ws)
-
         safe_write(ws, 'H2', f'RS- {enc.get("codigo_rs","")}', mm)
         safe_write(ws, 'D3', enc.get('planta',''), mm)
         safe_write(ws, 'G3', enc.get('fecha_servicio',''), mm)
@@ -130,10 +121,10 @@ def generar():
         safe_write(ws, 'I28', d.get('cal_pos',''), mm)
         safe_write(ws, 'I29', d.get('cal_tierra',''), mm)
         safe_write(ws, 'I30', d.get('cal_barra',''), mm)
-
-        nota = d.get('nota_especial','')
-        if nota:
-            safe_write(ws, 'A32', nota, mm)
+        if d.get('nota_especial'):
+            safe_write(ws, 'A32', d.get('nota_especial',''), mm)
+        if d.get('notas_dc'):
+            safe_write(ws, 'A56', f'NOTAS: {d["notas_dc"]}', mm)
 
         # Reapriete — recuadros azules
         rect_rows = d.get('rect_rows', [])
@@ -141,23 +132,20 @@ def generar():
         for i, row in enumerate(rect_rows[:5]):
             fr = filas_rect[i]
             safe_write(ws, f'A{fr}', row.get('al',''), mm)
-            safe_write(ws, f'B{fr+1}', _n(row.get('tl')) if row.get('tl') else None, mm)
+            if row.get('tl'):
+                safe_write(ws, f'B{fr+1}', _n(row.get('tl')), mm)
             safe_write(ws, f'C{fr+1}', row.get('el',''), mm)
+            # FIX: siempre escribir recuadros azules aunque estén vacíos
             rect_izq = row.get('rect_izq','')
             amp_izq = row.get('amp_izq','')
-            if rect_izq or amp_izq:
-                safe_write(ws, f'D{fr}', f'RECT.= {rect_izq} AMP= {amp_izq}', mm)
+            safe_write(ws, f'D{fr}', f'RECT.= {rect_izq}  AMP= {amp_izq}', mm)
             rect_der = row.get('rect_der','')
             amp_der = row.get('amp_der','')
-            if rect_der or amp_der:
-                safe_write(ws, f'F{fr}', f'RECT.= {rect_der} AMP= {amp_der}', mm)
+            safe_write(ws, f'F{fr}', f'RECT.= {rect_der}  AMP= {amp_der}', mm)
             safe_write(ws, f'G{fr}', row.get('ar',''), mm)
-            safe_write(ws, f'H{fr+1}', _n(row.get('tr')) if row.get('tr') else None, mm)
+            if row.get('tr'):
+                safe_write(ws, f'H{fr+1}', _n(row.get('tr')), mm)
             safe_write(ws, f'I{fr+1}', row.get('er',''), mm)
-
-        notas_dc = d.get('notas_dc','')
-        if notas_dc:
-            safe_write(ws, 'A56', f'NOTAS: {notas_dc}', mm)
 
         # === TABLERO DE AC ===
         ws3 = wb['TABLERO DE AC']
@@ -172,6 +160,7 @@ def generar():
         safe_write(ws3, 'H29', _n(t.get('if1')), mm3)
         safe_write(ws3, 'H30', _n(t.get('if2')), mm3)
         safe_write(ws3, 'H31', _n(t.get('if3')), mm3)
+        # FIX: voltajes fijos
         safe_write(ws3, 'H32', _n(t.get('vf12')), mm3)
         safe_write(ws3, 'H33', _n(t.get('vf13')), mm3)
         safe_write(ws3, 'H34', _n(t.get('vf23')), mm3)
@@ -198,9 +187,8 @@ def generar():
         safe_write(ws4, 'D32', d.get('bat_alarma',''), mm4)
         safe_write(ws4, 'H28', _n(d.get('bat_volt')), mm4)
         safe_write(ws4, 'H34', _n(d.get('bat_efic')), mm4)
-        notas_bancos = d.get('notas_bancos','')
-        if notas_bancos:
-            safe_write(ws4, 'A59', f'NOTAS: {notas_bancos}', mm4)
+        if d.get('notas_bancos'):
+            safe_write(ws4, 'A59', f'NOTAS: {d["notas_bancos"]}', mm4)
 
         # === TEMP.BATERIAS ===
         ws5 = wb['TEMP.BATERIAS']
@@ -208,10 +196,10 @@ def generar():
         gabinetes = d.get('gabinetes', [])
         for i, gab in enumerate(gabinetes[:4]):
             r = 38 + i
+            # FIX: escribir nombre completo del gabinete
             safe_write(ws5, f'F{r}', gab.get('nombre',''), mm5)
             safe_write(ws5, f'G{r}', gab.get('tierra',''), mm5)
-        tb_alarmas = d.get('tb_alarmas','NINGUNA')
-        safe_write(ws5, 'F34', f'ALARMAS PRESENTES:{tb_alarmas}', mm5)
+        safe_write(ws5, 'F34', f'ALARMAS PRESENTES:{d.get("tb_alarmas","NINGUNA")}', mm5)
         if d.get('tb_notas'):
             safe_write(ws5, 'F28', f'NOTAS: {d["tb_notas"]}', mm5)
 
@@ -224,42 +212,37 @@ def generar():
             nc, vc = dist_coords[i]
             safe_write(ws6, nc, dist.get('nombre',''), mm6)
             safe_write(ws6, vc, dist.get('estado',''), mm6)
-        td_alarmas = d.get('td_alarmas','NINGUNA')
-        safe_write(ws6, 'F34', f'ALARMAS PRESENTES:{td_alarmas}', mm6)
+        safe_write(ws6, 'F34', f'ALARMAS PRESENTES:{d.get("td_alarmas","NINGUNA")}', mm6)
         if d.get('td_notas'):
             safe_write(ws6, 'F28', f'NOTAS: {d["td_notas"]}', mm6)
 
         # === TEMP.RECTIFICADORES ===
         ws7 = wb['TEMP.RECTIFICADORES']
         mm7 = get_merge_map(ws7)
-        shefts_izq = d.get('shefts_izq', [])
-        shefts_der = d.get('shefts_der', [])
-        for i, s in enumerate(shefts_izq[:4]):
+        for i, s in enumerate(d.get('shefts_izq', [])[:4]):
             safe_write(ws7, f'F{37+i}', s.get('nombre',''), mm7)
             safe_write(ws7, f'G{37+i}', s.get('estado','OK'), mm7)
-        for i, s in enumerate(shefts_der[:4]):
+        for i, s in enumerate(d.get('shefts_der', [])[:4]):
             safe_write(ws7, f'H{37+i}', s.get('nombre',''), mm7)
             safe_write(ws7, f'I{37+i}', s.get('estado','OK'), mm7)
         safe_write(ws7, 'F44', d.get('tr_limpieza','OK'), mm7)
-        tr_alarmas = d.get('tr_alarmas','NINGUNA')
-        safe_write(ws7, 'F32', f'ALARMAS PRESENTES:{tr_alarmas}', mm7)
+        safe_write(ws7, 'F32', f'ALARMAS PRESENTES:{d.get("tr_alarmas","NINGUNA")}', mm7)
         if d.get('tr_notas'):
             safe_write(ws7, 'F28', f'NOTAS: {d["tr_notas"]}', mm7)
 
-        # === NOTAS DIST Y RECT ===
+        # === DIST. Y RECT. ===
         ws2 = wb['DIST. Y RECT.']
         mm2 = get_merge_map(ws2)
         if d.get('notas_dist'):
             safe_write(ws2, 'A54', f'NOTAS: {d["notas_dist"]}', mm2)
 
-        # === NOTAS TEMP TABLERO AC ===
+        # === TEMP. TABLERO AC ===
         ws8 = wb['TEMP. TABLERO AC']
         mm8 = get_merge_map(ws8)
         if d.get('notas_temp_tablero'):
             safe_write(ws8, 'F28', f'NOTAS: {d["notas_temp_tablero"]}', mm8)
 
         # === INSERTAR FOTOS ===
-        sheet_fotos_map = {}
         for seccion_app, urls in fotos_por_seccion.items():
             sheet_name = SECCION_MAP.get(seccion_app)
             if not sheet_name or sheet_name not in wb.sheetnames:
@@ -270,7 +253,6 @@ def generar():
                 if idx < len(zonas):
                     insertar_foto(ws_foto, url, zonas[idx])
 
-        # Guardar en memoria
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
@@ -280,23 +262,12 @@ def generar():
         fecha = enc.get('fecha_servicio','').replace('/','').replace(' ','_')[:15]
         filename = f"RS-{codigo}_{planta}_{fecha}.xlsx"
 
-        return send_file(
-            output,
+        return send_file(output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
+            as_attachment=True, download_name=filename)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-def _n(val):
-    if val is None or val == '':
-        return None
-    try:
-        return float(val)
-    except:
-        return val
 
 @app.route('/health', methods=['GET'])
 def health():
