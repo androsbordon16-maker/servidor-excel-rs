@@ -231,7 +231,8 @@ def generar():
         if d.get('notas_dist'): safe_write(ws2,'A54',f'NOTAS: {d["notas_dist"]}',mm2)
         ws8 = wb['TEMP. TABLERO AC']; mm8 = get_merge_map(ws8)
         if d.get('notas_temp_tablero'): safe_write(ws8,'F28',f'NOTAS: {d["notas_temp_tablero"]}',mm8)
-
+            
+print("📸 Fotos recibidas:", fotos_por_seccion)
         # === INSERTAR FOTOS ===
         for seccion_app, urls in fotos_por_seccion.items():
             sheet_name = SECCION_SHEET.get(seccion_app)
