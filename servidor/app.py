@@ -12,7 +12,6 @@ CORS(app)
 
 TEMPLATE_URL = os.environ.get('TEMPLATE_URL', '')
 
-# Mapa de sección app → nombre de hoja Excel
 SECCION_SHEET = {
     'Planta DC':          'DC PLANTA',
     'Distribución DC':    'DIST. Y RECT.',
@@ -35,7 +34,6 @@ SECCION_SHEET = {
     'Temp Tab Extra':     'TEMP. TABLERO AC',
 }
 
-# Zonas por sección — cada subsección tiene sus zonas propias
 SECCION_ZONAS = {
     'Planta DC':              [(11,26,1,5)],
     'Distribución DC':        [(11,27,1,4),(11,27,4,8),(11,27,8,11)],
@@ -117,6 +115,14 @@ def _n(val):
     try: return float(val)
     except: return val
 
+def escribir_codigo_rs(wb, codigo_rs):
+    """Escribe el código RS en H2 de todas las hojas"""
+    valor = f'RS- {codigo_rs}'
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        mm = get_merge_map(ws)
+        safe_write(ws, 'H2', valor, mm)
+
 @app.route('/generar', methods=['POST'])
 def generar():
     try:
@@ -131,10 +137,12 @@ def generar():
         for sheet in wb.sheetnames:
             limpiar_fotos_contenido(wb[sheet])
 
+        # === CÓDIGO RS EN TODAS LAS HOJAS ===
+        escribir_codigo_rs(wb, enc.get('codigo_rs', ''))
+
         # === DC PLANTA ===
         ws = wb['DC PLANTA']
         mm = get_merge_map(ws)
-        safe_write(ws, 'H2', f'RS- {enc.get("codigo_rs","")}', mm)
         safe_write(ws, 'D3', enc.get('planta',''), mm)
         safe_write(ws, 'G3', enc.get('fecha_servicio',''), mm)
         safe_write(ws, 'D4', enc.get('sitio',''), mm)
@@ -159,8 +167,17 @@ def generar():
             safe_write(ws, 'A32', d['nota_especial'], mm)
         if d.get('notas_dc'):
             safe_write(ws, 'A56', f'NOTAS: {d["notas_dc"]}', mm)
-        for i, row in enumerate(d.get('rect_rows', [])[:5]):
-            fr = [38,41,44,47,50][i]
+
+        # === REAPRIETE — solo filas con datos ===
+        filas_excel = [38, 41, 44, 47, 50]
+        rect_rows = d.get('rect_rows', [])
+        # Filtrar solo filas que tengan al menos algún dato
+        filas_con_datos = [row for row in rect_rows if any([
+            row.get('al',''), row.get('rect_izq',''), row.get('amp_izq',''),
+            row.get('rect_der',''), row.get('amp_der',''), row.get('ar','')
+        ])]
+        for i, row in enumerate(filas_con_datos[:5]):
+            fr = filas_excel[i]
             safe_write(ws, f'A{fr}', row.get('al',''), mm)
             if row.get('tl'): safe_write(ws, f'B{fr+1}', _n(row['tl']), mm)
             safe_write(ws, f'C{fr+1}', row.get('el',''), mm)
@@ -174,25 +191,42 @@ def generar():
         ws3 = wb['TABLERO DE AC']
         mm3 = get_merge_map(ws3)
         t = d.get('tableros_ac', [{}])[0] if d.get('tableros_ac') else {}
-        safe_write(ws3,'B29',t.get('calibre',''),mm3); safe_write(ws3,'B30',_n(t.get('cables')),mm3)
-        safe_write(ws3,'B31',t.get('apr1','OK'),mm3); safe_write(ws3,'B32',t.get('apr2','OK'),mm3); safe_write(ws3,'B33',t.get('apr3','OK'),mm3)
-        safe_write(ws3,'H29',_n(t.get('if1')),mm3); safe_write(ws3,'H30',_n(t.get('if2')),mm3); safe_write(ws3,'H31',_n(t.get('if3')),mm3)
-        safe_write(ws3,'H32',_n(t.get('vf12')),mm3); safe_write(ws3,'H33',_n(t.get('vf13')),mm3); safe_write(ws3,'H34',_n(t.get('vf23')),mm3)
+        safe_write(ws3,'B29',t.get('calibre',''),mm3)
+        safe_write(ws3,'B30',_n(t.get('cables')),mm3)
+        safe_write(ws3,'B31',t.get('apr1','OK'),mm3)
+        safe_write(ws3,'B32',t.get('apr2','OK'),mm3)
+        safe_write(ws3,'B33',t.get('apr3','OK'),mm3)
+        safe_write(ws3,'H29',_n(t.get('if1')),mm3)
+        safe_write(ws3,'H30',_n(t.get('if2')),mm3)
+        safe_write(ws3,'H31',_n(t.get('if3')),mm3)
+        safe_write(ws3,'H32',_n(t.get('vf12')),mm3)
+        safe_write(ws3,'H33',_n(t.get('vf13')),mm3)
+        safe_write(ws3,'H34',_n(t.get('vf23')),mm3)
 
         # === BANCOS ===
         ws4 = wb['BANCOS ']
         mm4 = get_merge_map(ws4)
-        safe_write(ws4,'H11',d.get('rack',''),mm4); safe_write(ws4,'H12',d.get('bat_modelo',''),mm4)
-        safe_write(ws4,'H13',d.get('bat_tipo','LITIO'),mm4); safe_write(ws4,'H14',_n(d.get('gab_inst')),mm4)
-        safe_write(ws4,'H15',d.get('bat_marca',''),mm4); safe_write(ws4,'H16',d.get('bat_año',''),mm4)
-        safe_write(ws4,'H17',_n(d.get('cap_banco')),mm4); safe_write(ws4,'H18',_n(d.get('cant_break')),mm4)
-        safe_write(ws4,'H19',_n(d.get('cap_break')),mm4); safe_write(ws4,'I22',_n(d.get('bancos_inst')),mm4)
-        safe_write(ws4,'I23',_n(d.get('cap_banco_ah')),mm4); safe_write(ws4,'I24','=I23*I22',mm4)
-        safe_write(ws4,'C28',_n(d.get('bat_cables')),mm4); safe_write(ws4,'C29',d.get('bat_calibre',''),mm4)
-        safe_write(ws4,'D30',d.get('bat_break_val',''),mm4); safe_write(ws4,'D31',d.get('bat_tierra',''),mm4)
-        safe_write(ws4,'D32',d.get('bat_alarma',''),mm4); safe_write(ws4,'H28',_n(d.get('bat_volt')),mm4)
+        safe_write(ws4,'H11',d.get('rack',''),mm4)
+        safe_write(ws4,'H12',d.get('bat_modelo',''),mm4)
+        safe_write(ws4,'H13',d.get('bat_tipo','LITIO'),mm4)
+        safe_write(ws4,'H14',_n(d.get('gab_inst')),mm4)
+        safe_write(ws4,'H15',d.get('bat_marca',''),mm4)
+        safe_write(ws4,'H16',d.get('bat_año',''),mm4)
+        safe_write(ws4,'H17',_n(d.get('cap_banco')),mm4)
+        safe_write(ws4,'H18',_n(d.get('cant_break')),mm4)
+        safe_write(ws4,'H19',_n(d.get('cap_break')),mm4)
+        safe_write(ws4,'I22',_n(d.get('bancos_inst')),mm4)
+        safe_write(ws4,'I23',_n(d.get('cap_banco_ah')),mm4)
+        safe_write(ws4,'I24','=I23*I22',mm4)
+        safe_write(ws4,'C28',_n(d.get('bat_cables')),mm4)
+        safe_write(ws4,'C29',d.get('bat_calibre',''),mm4)
+        safe_write(ws4,'D30',d.get('bat_break_val',''),mm4)
+        safe_write(ws4,'D31',d.get('bat_tierra',''),mm4)
+        safe_write(ws4,'D32',d.get('bat_alarma',''),mm4)
+        safe_write(ws4,'H28',_n(d.get('bat_volt')),mm4)
         safe_write(ws4,'H34',_n(d.get('bat_efic')),mm4)
-        if d.get('notas_bancos'): safe_write(ws4,'A59',f'NOTAS: {d["notas_bancos"]}',mm4)
+        if d.get('notas_bancos'):
+            safe_write(ws4,'A59',f'NOTAS: {d["notas_bancos"]}',mm4)
 
         # === TEMP.BATERIAS ===
         ws5 = wb['TEMP.BATERIAS']
@@ -201,7 +235,8 @@ def generar():
             safe_write(ws5,f'F{38+i}',gab.get('nombre',''),mm5)
             safe_write(ws5,f'G{38+i}',gab.get('tierra',''),mm5)
         safe_write(ws5,'F34',f'ALARMAS PRESENTES:{d.get("tb_alarmas","NINGUNA")}',mm5)
-        if d.get('tb_notas'): safe_write(ws5,'F28',f'NOTAS: {d["tb_notas"]}',mm5)
+        if d.get('tb_notas'):
+            safe_write(ws5,'F28',f'NOTAS: {d["tb_notas"]}',mm5)
 
         # === TEMP.DISTRIBUCION ===
         ws6 = wb['TEMP.DISTRIBUCION']
@@ -211,7 +246,8 @@ def generar():
             safe_write(ws6,dc[i][0],dist.get('nombre',''),mm6)
             safe_write(ws6,dc[i][1],dist.get('estado',''),mm6)
         safe_write(ws6,'F34',f'ALARMAS PRESENTES:{d.get("td_alarmas","NINGUNA")}',mm6)
-        if d.get('td_notas'): safe_write(ws6,'F28',f'NOTAS: {d["td_notas"]}',mm6)
+        if d.get('td_notas'):
+            safe_write(ws6,'F28',f'NOTAS: {d["td_notas"]}',mm6)
 
         # === TEMP.RECTIFICADORES ===
         ws7 = wb['TEMP.RECTIFICADORES']
@@ -224,16 +260,21 @@ def generar():
             safe_write(ws7,f'I{37+i}',s.get('estado','OK'),mm7)
         safe_write(ws7,'F44',d.get('tr_limpieza','OK'),mm7)
         safe_write(ws7,'F32',f'ALARMAS PRESENTES:{d.get("tr_alarmas","NINGUNA")}',mm7)
-        if d.get('tr_notas'): safe_write(ws7,'F28',f'NOTAS: {d["tr_notas"]}',mm7)
+        if d.get('tr_notas'):
+            safe_write(ws7,'F28',f'NOTAS: {d["tr_notas"]}',mm7)
 
         # === NOTAS DIST Y RECT / TEMP TABLERO AC ===
-        ws2 = wb['DIST. Y RECT.']; mm2 = get_merge_map(ws2)
-        if d.get('notas_dist'): safe_write(ws2,'A54',f'NOTAS: {d["notas_dist"]}',mm2)
-        ws8 = wb['TEMP. TABLERO AC']; mm8 = get_merge_map(ws8)
-        if d.get('notas_temp_tablero'): safe_write(ws8,'F28',f'NOTAS: {d["notas_temp_tablero"]}',mm8)
-            
-print("📸 Fotos recibidas:", fotos_por_seccion)
+        ws2 = wb['DIST. Y RECT.']
+        mm2 = get_merge_map(ws2)
+        if d.get('notas_dist'):
+            safe_write(ws2,'A54',f'NOTAS: {d["notas_dist"]}',mm2)
+        ws8 = wb['TEMP. TABLERO AC']
+        mm8 = get_merge_map(ws8)
+        if d.get('notas_temp_tablero'):
+            safe_write(ws8,'F28',f'NOTAS: {d["notas_temp_tablero"]}',mm8)
+
         # === INSERTAR FOTOS ===
+        print("📸 Fotos recibidas:", fotos_por_seccion)
         for seccion_app, urls in fotos_por_seccion.items():
             sheet_name = SECCION_SHEET.get(seccion_app)
             if not sheet_name or sheet_name not in wb.sheetnames: continue
