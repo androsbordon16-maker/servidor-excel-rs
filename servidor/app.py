@@ -34,28 +34,28 @@ SECCION_SHEET = {
     'Temp Tab Extra':     'TEMP. TABLERO AC',
 }
 
-# Zonas: (fila_inicio, fila_fin, col_inicio, col_fin, ancho_px, alto_px)
-# Dimensiones calculadas exactamente de los recuadros grises del template
+# Zonas exactas medidas del Excel en blanco (recuadros grises)
+# Formato: (fila_inicio, fila_fin, col_inicio, col_fin, ancho_px, alto_px)
 SECCION_ZONAS = {
     'Planta DC':              [(11,26,1,4,274,305)],
-    'Distribución DC':        [(11,32,1,9,574,410),(33,52,1,9,574,372)],
-    'Rectificadores':         [(11,32,1,9,574,410),(33,52,1,9,574,372)],
-    'Tablero rectificadores': [(11,37,1,9,574,506),(38,53,1,9,574,298)],
-    'Barra de tierras':       [(11,37,1,9,574,506),(38,53,1,9,574,298)],
-    'Gabinete rack':          [(11,35,1,9,698,476)],
-    'Cables baterías':        [(36,57,1,9,698,410)],
-    'Temp Bat Superior':      [(10,27,1,5,334,338),(10,27,6,10,442,338)],
-    'Temp Bat Inferior':      [(28,45,1,5,334,345),(28,45,6,10,442,345)],
-    'Temp Bat Extra':         [(46,61,1,5,334,298),(46,61,6,10,442,298)],
-    'Temp Dist Superior':     [(10,27,1,5,334,338),(10,27,6,10,442,338)],
-    'Temp Dist Inferior':     [(28,45,1,5,334,345),(28,45,6,10,442,345)],
-    'Temp Dist Extra':        [(46,61,1,5,334,298),(46,61,6,10,442,298)],
-    'Temp Rect Izq':          [(10,27,1,5,334,338),(10,27,6,10,442,338)],
-    'Temp Rect Der':          [(28,45,1,5,334,346),(28,45,6,10,442,346)],
-    'Temp Rect Extra':        [(46,61,1,5,334,298),(46,61,6,10,442,298)],
-    'Temp Tab Superior':      [(10,27,1,5,334,338),(10,27,6,10,442,338)],
-    'Temp Tab Inferior':      [(28,45,1,5,334,343),(28,45,6,10,442,343)],
-    'Temp Tab Extra':         [(46,62,1,5,334,318),(46,62,6,10,442,318)],
+    'Distribución DC':        [(11,29,1,5,334,353),(11,29,6,9,240,353)],
+    'Rectificadores':         [(33,52,1,5,334,372),(33,52,6,9,240,372)],
+    'Tablero rectificadores': [(11,26,1,5,334,298),(11,26,6,9,240,298)],
+    'Barra de tierras':       [(38,53,1,5,334,298),(38,53,6,9,240,298)],
+    'Gabinete rack':          [(11,26,1,5,334,306)],
+    'Cables baterías':        [(36,57,1,5,334,410),(36,57,6,9,364,410)],
+    'Temp Bat Superior':      [(10,25,1,4,274,298),(10,25,6,9,240,298)],
+    'Temp Bat Inferior':      [(28,43,1,4,274,305)],
+    'Temp Bat Extra':         [(46,61,1,4,274,298),(46,61,6,9,240,298)],
+    'Temp Dist Superior':     [(10,25,1,4,274,298),(10,25,6,9,240,298)],
+    'Temp Dist Inferior':     [(28,43,1,4,274,305)],
+    'Temp Dist Extra':        [(46,61,1,4,274,298),(46,61,6,9,240,298)],
+    'Temp Rect Izq':          [(10,25,1,4,274,298),(10,25,6,9,240,298)],
+    'Temp Rect Der':          [(28,43,1,4,274,306)],
+    'Temp Rect Extra':        [(46,61,1,4,274,298),(46,61,6,9,240,298)],
+    'Temp Tab Superior':      [(10,25,1,4,274,298),(10,25,6,9,240,298)],
+    'Temp Tab Inferior':      [(28,43,1,4,274,303)],
+    'Temp Tab Extra':         [(46,61,1,4,274,298),(46,61,6,9,240,298)],
 }
 
 HEADER_MAX_ROW = 6
@@ -95,7 +95,7 @@ def insertar_foto(ws, url, zona):
             return
         img_data = io.BytesIO(resp.content)
         pil_img = PILImage.open(img_data)
-        # Corregir orientación EXIF
+        # Corregir orientación EXIF (fotos de celular volteadas)
         pil_img = ImageOps.exif_transpose(pil_img)
         # Redimensionar exactamente al tamaño del recuadro
         pil_img = pil_img.resize((target_w, target_h), PILImage.LANCZOS)
