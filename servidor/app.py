@@ -34,26 +34,27 @@ SECCION_SHEET = {
     'Temp Tab Extra':     'TEMP. TABLERO AC',
 }
 
+# Zonas: (fila_inicio, fila_fin, col_inicio, col_fin, ancho_px, alto_px)
 SECCION_ZONAS = {
-    'Planta DC':              [(11,26,1,5)],
-    'Distribución DC':        [(11,27,1,4),(11,27,4,8),(11,27,8,11)],
-    'Rectificadores':         [(33,49,1,4),(33,49,5,10),(33,49,7,11)],
-    'Tablero rectificadores': [(10,27,1,4),(10,26,4,8),(10,27,8,11)],
-    'Barra de tierras':       [(38,53,1,5),(38,54,6,10)],
-    'Gabinete rack':          [(11,27,1,5)],
-    'Cables baterías':        [(42,57,1,4),(41,58,5,8),(41,57,8,10)],
-    'Temp Bat Superior':      [(10,26,1,5),(9,25,6,10)],
-    'Temp Bat Inferior':      [(28,44,1,5),(28,44,6,10)],
-    'Temp Bat Extra':         [(46,61,1,5),(46,61,6,10)],
-    'Temp Dist Superior':     [(10,25,1,5),(10,25,6,9)],
-    'Temp Dist Inferior':     [(28,43,1,4),(28,43,6,9)],
-    'Temp Dist Extra':        [(46,61,1,5),(46,61,6,9)],
-    'Temp Rect Izq':          [(10,25,1,5),(10,25,6,10)],
-    'Temp Rect Der':          [(28,43,1,5),(28,43,6,10)],
-    'Temp Rect Extra':        [(46,61,1,5)],
-    'Temp Tab Superior':      [(9,25,1,4),(10,25,6,9)],
-    'Temp Tab Inferior':      [(28,44,1,4),(28,44,6,9)],
-    'Temp Tab Extra':         [(46,62,1,4),(46,62,6,9)],
+    'Planta DC':              [(11,26,1,5,334,305)],
+    'Distribución DC':        [(11,27,1,4,274,316),(11,27,4,8,300,316),(11,27,8,11,382,316)],
+    'Rectificadores':         [(33,49,1,4,274,316),(33,49,5,10,502,316),(33,49,7,11,442,316)],
+    'Tablero rectificadores': [(10,27,1,4,274,336),(10,26,4,8,300,318),(10,27,8,11,382,336)],
+    'Barra de tierras':       [(38,53,1,5,334,298),(38,54,6,10,442,316)],
+    'Gabinete rack':          [(11,27,1,5,334,326)],
+    'Cables baterías':        [(42,57,1,4,274,298),(41,58,5,8,296,338),(41,57,8,10,390,318)],
+    'Temp Bat Superior':      [(10,26,1,5,334,318),(9,25,6,10,442,318)],
+    'Temp Bat Inferior':      [(28,44,1,5,334,325),(28,44,6,10,442,325)],
+    'Temp Bat Extra':         [(46,61,1,5,334,298),(46,61,6,10,442,298)],
+    'Temp Dist Superior':     [(10,25,1,5,334,298),(10,25,6,9,240,298)],
+    'Temp Dist Inferior':     [(28,43,1,4,274,305),(28,43,6,9,240,305)],
+    'Temp Dist Extra':        [(46,61,1,5,334,298),(46,61,6,9,240,298)],
+    'Temp Rect Izq':          [(10,25,1,5,334,298),(10,25,6,10,442,298)],
+    'Temp Rect Der':          [(28,43,1,5,334,306),(28,43,6,10,442,306)],
+    'Temp Rect Extra':        [(46,61,1,5,334,298)],
+    'Temp Tab Superior':      [(9,25,1,4,274,318),(10,25,6,9,240,298)],
+    'Temp Tab Inferior':      [(28,44,1,4,274,323),(28,44,6,9,240,323)],
+    'Temp Tab Extra':         [(46,62,1,4,274,318),(46,62,6,9,240,318)],
 }
 
 HEADER_MAX_ROW = 6
@@ -87,6 +88,7 @@ def limpiar_fotos_contenido(ws):
 
 def insertar_foto(ws, url, zona):
     try:
+        r1, r2, c1, c2, target_w, target_h = zona
         resp = requests.get(url, timeout=20)
         if resp.status_code != 200:
             return
@@ -94,19 +96,17 @@ def insertar_foto(ws, url, zona):
         pil_img = PILImage.open(img_data)
         # Corregir orientación EXIF (fotos de celular volteadas)
         pil_img = ImageOps.exif_transpose(pil_img)
-        pil_img.thumbnail((800, 600), PILImage.LANCZOS)
+        # Redimensionar exactamente al tamaño del recuadro
+        pil_img = pil_img.resize((target_w, target_h), PILImage.LANCZOS)
         if pil_img.mode in ('RGBA', 'LA', 'P'):
             pil_img = pil_img.convert('RGB')
         out = io.BytesIO()
         pil_img.save(out, format='JPEG', quality=85)
         out.seek(0)
         xl_img = XLImage(out)
-        r1, r2, c1, c2 = zona
+        xl_img.width = target_w
+        xl_img.height = target_h
         from openpyxl.utils import get_column_letter
-        col_w = sum((ws.column_dimensions[get_column_letter(c)].width or 8) if get_column_letter(c) in ws.column_dimensions else 8 for c in range(c1, c2+1))
-        row_h = sum((ws.row_dimensions[r].height or 15) if r in ws.row_dimensions else 15 for r in range(r1, r2+1))
-        xl_img.width = int(col_w * 7.5)
-        xl_img.height = int(row_h * 1.33)
         xl_img.anchor = f"{get_column_letter(c1)}{r1}"
         ws.add_image(xl_img)
     except Exception as e:
@@ -169,9 +169,22 @@ def generar():
         if d.get('notas_dc'):
             safe_write(ws, 'A56', f'NOTAS: {d["notas_dc"]}', mm)
 
-        # === REAPRIETE — solo filas con datos en RECT o AMP ===
+        # === REAPRIETE — limpiar todas las filas, luego escribir solo las que tienen datos ===
         filas_excel = [38, 41, 44, 47, 50]
         rect_rows = d.get('rect_rows', [])
+
+        # Limpiar TODAS las filas primero
+        for fr in filas_excel:
+            safe_write(ws, f'A{fr}', None, mm)
+            safe_write(ws, f'B{fr+1}', None, mm)
+            safe_write(ws, f'C{fr+1}', None, mm)
+            safe_write(ws, f'D{fr}', None, mm)
+            safe_write(ws, f'F{fr}', None, mm)
+            safe_write(ws, f'G{fr}', None, mm)
+            safe_write(ws, f'H{fr+1}', None, mm)
+            safe_write(ws, f'I{fr+1}', None, mm)
+
+        # Escribir solo filas con datos en RECT o AMP
         filas_con_datos = [row for row in rect_rows if any([
             str(row.get('rect_izq', '')).strip(),
             str(row.get('amp_izq', '')).strip(),
