@@ -35,26 +35,27 @@ SECCION_SHEET = {
 }
 
 # Zonas: (fila_inicio, fila_fin, col_inicio, col_fin, ancho_px, alto_px)
+# Dimensiones calculadas exactamente de los recuadros grises del template
 SECCION_ZONAS = {
-    'Planta DC':              [(11,26,1,5,334,305)],
-    'Distribución DC':        [(11,27,1,4,274,316),(11,27,4,8,300,316),(11,27,8,11,382,316)],
-    'Rectificadores':         [(33,49,1,4,274,316),(33,49,5,10,502,316),(33,49,7,11,442,316)],
-    'Tablero rectificadores': [(10,27,1,4,274,336),(10,26,4,8,300,318),(10,27,8,11,382,336)],
-    'Barra de tierras':       [(38,53,1,5,334,298),(38,54,6,10,442,316)],
-    'Gabinete rack':          [(11,27,1,5,334,326)],
-    'Cables baterías':        [(42,57,1,4,274,298),(41,58,5,8,296,338),(41,57,8,10,390,318)],
-    'Temp Bat Superior':      [(10,26,1,5,334,318),(9,25,6,10,442,318)],
-    'Temp Bat Inferior':      [(28,44,1,5,334,325),(28,44,6,10,442,325)],
+    'Planta DC':              [(11,26,1,4,274,305)],
+    'Distribución DC':        [(11,32,1,9,574,410),(33,52,1,9,574,372)],
+    'Rectificadores':         [(11,32,1,9,574,410),(33,52,1,9,574,372)],
+    'Tablero rectificadores': [(11,37,1,9,574,506),(38,53,1,9,574,298)],
+    'Barra de tierras':       [(11,37,1,9,574,506),(38,53,1,9,574,298)],
+    'Gabinete rack':          [(11,35,1,9,698,476)],
+    'Cables baterías':        [(36,57,1,9,698,410)],
+    'Temp Bat Superior':      [(10,27,1,5,334,338),(10,27,6,10,442,338)],
+    'Temp Bat Inferior':      [(28,45,1,5,334,345),(28,45,6,10,442,345)],
     'Temp Bat Extra':         [(46,61,1,5,334,298),(46,61,6,10,442,298)],
-    'Temp Dist Superior':     [(10,25,1,5,334,298),(10,25,6,9,240,298)],
-    'Temp Dist Inferior':     [(28,43,1,4,274,305),(28,43,6,9,240,305)],
-    'Temp Dist Extra':        [(46,61,1,5,334,298),(46,61,6,9,240,298)],
-    'Temp Rect Izq':          [(10,25,1,5,334,298),(10,25,6,10,442,298)],
-    'Temp Rect Der':          [(28,43,1,5,334,306),(28,43,6,10,442,306)],
-    'Temp Rect Extra':        [(46,61,1,5,334,298)],
-    'Temp Tab Superior':      [(9,25,1,4,274,318),(10,25,6,9,240,298)],
-    'Temp Tab Inferior':      [(28,44,1,4,274,323),(28,44,6,9,240,323)],
-    'Temp Tab Extra':         [(46,62,1,4,274,318),(46,62,6,9,240,318)],
+    'Temp Dist Superior':     [(10,27,1,5,334,338),(10,27,6,10,442,338)],
+    'Temp Dist Inferior':     [(28,45,1,5,334,345),(28,45,6,10,442,345)],
+    'Temp Dist Extra':        [(46,61,1,5,334,298),(46,61,6,10,442,298)],
+    'Temp Rect Izq':          [(10,27,1,5,334,338),(10,27,6,10,442,338)],
+    'Temp Rect Der':          [(28,45,1,5,334,346),(28,45,6,10,442,346)],
+    'Temp Rect Extra':        [(46,61,1,5,334,298),(46,61,6,10,442,298)],
+    'Temp Tab Superior':      [(10,27,1,5,334,338),(10,27,6,10,442,338)],
+    'Temp Tab Inferior':      [(28,45,1,5,334,343),(28,45,6,10,442,343)],
+    'Temp Tab Extra':         [(46,62,1,5,334,318),(46,62,6,10,442,318)],
 }
 
 HEADER_MAX_ROW = 6
@@ -94,7 +95,7 @@ def insertar_foto(ws, url, zona):
             return
         img_data = io.BytesIO(resp.content)
         pil_img = PILImage.open(img_data)
-        # Corregir orientación EXIF (fotos de celular volteadas)
+        # Corregir orientación EXIF
         pil_img = ImageOps.exif_transpose(pil_img)
         # Redimensionar exactamente al tamaño del recuadro
         pil_img = pil_img.resize((target_w, target_h), PILImage.LANCZOS)
@@ -169,29 +170,10 @@ def generar():
         if d.get('notas_dc'):
             safe_write(ws, 'A56', f'NOTAS: {d["notas_dc"]}', mm)
 
-        # === REAPRIETE — limpiar todas las filas, luego escribir solo las que tienen datos ===
+        # === REAPRIETE ===
         filas_excel = [38, 41, 44, 47, 50]
         rect_rows = d.get('rect_rows', [])
-
-        # Limpiar TODAS las filas primero
-        for fr in filas_excel:
-            safe_write(ws, f'A{fr}', None, mm)
-            safe_write(ws, f'B{fr+1}', None, mm)
-            safe_write(ws, f'C{fr+1}', None, mm)
-            safe_write(ws, f'D{fr}', None, mm)
-            safe_write(ws, f'F{fr}', None, mm)
-            safe_write(ws, f'G{fr}', None, mm)
-            safe_write(ws, f'H{fr+1}', None, mm)
-            safe_write(ws, f'I{fr+1}', None, mm)
-
-        # Escribir solo filas con datos en RECT o AMP
-        filas_con_datos = [row for row in rect_rows if any([
-            str(row.get('rect_izq', '')).strip(),
-            str(row.get('amp_izq', '')).strip(),
-            str(row.get('rect_der', '')).strip(),
-            str(row.get('amp_der', '')).strip(),
-        ])]
-        for i, row in enumerate(filas_con_datos[:5]):
+        for i, row in enumerate(rect_rows[:5]):
             fr = filas_excel[i]
             safe_write(ws, f'A{fr}', row.get('al',''), mm)
             if row.get('tl'): safe_write(ws, f'B{fr+1}', _n(row['tl']), mm)
