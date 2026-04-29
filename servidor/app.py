@@ -5,7 +5,7 @@ from openpyxl.drawing.image import Image as XLImage
 import requests
 import io
 import os
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 
 app = Flask(__name__)
 CORS(app)
@@ -92,6 +92,8 @@ def insertar_foto(ws, url, zona):
             return
         img_data = io.BytesIO(resp.content)
         pil_img = PILImage.open(img_data)
+        # Corregir orientación EXIF (fotos de celular volteadas)
+        pil_img = ImageOps.exif_transpose(pil_img)
         pil_img.thumbnail((800, 600), PILImage.LANCZOS)
         if pil_img.mode in ('RGBA', 'LA', 'P'):
             pil_img = pil_img.convert('RGB')
@@ -116,7 +118,6 @@ def _n(val):
     except: return val
 
 def escribir_codigo_rs(wb, codigo_rs):
-    """Escribe el código RS en H2 de todas las hojas"""
     valor = f'RS- {codigo_rs}'
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
@@ -168,14 +169,15 @@ def generar():
         if d.get('notas_dc'):
             safe_write(ws, 'A56', f'NOTAS: {d["notas_dc"]}', mm)
 
-        # === REAPRIETE — solo filas con datos ===
+        # === REAPRIETE — solo filas con datos en RECT o AMP ===
         filas_excel = [38, 41, 44, 47, 50]
         rect_rows = d.get('rect_rows', [])
-        # Filtrar solo filas que tengan al menos algún dato
         filas_con_datos = [row for row in rect_rows if any([
-    row.get('rect_izq','').strip(), row.get('amp_izq','').strip(),
-    row.get('rect_der','').strip(), row.get('amp_der','').strip(),
-])]
+            str(row.get('rect_izq', '')).strip(),
+            str(row.get('amp_izq', '')).strip(),
+            str(row.get('rect_der', '')).strip(),
+            str(row.get('amp_der', '')).strip(),
+        ])]
         for i, row in enumerate(filas_con_datos[:5]):
             fr = filas_excel[i]
             safe_write(ws, f'A{fr}', row.get('al',''), mm)
