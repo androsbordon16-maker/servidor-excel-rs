@@ -173,9 +173,9 @@ def generar():
         rect_rows = d.get('rect_rows', [])
         # Filtrar solo filas que tengan al menos algún dato
         filas_con_datos = [row for row in rect_rows if any([
-            row.get('al',''), row.get('rect_izq',''), row.get('amp_izq',''),
-            row.get('rect_der',''), row.get('amp_der',''), row.get('ar','')
-        ])]
+    row.get('rect_izq','').strip(), row.get('amp_izq','').strip(),
+    row.get('rect_der','').strip(), row.get('amp_der','').strip(),
+])]
         for i, row in enumerate(filas_con_datos[:5]):
             fr = filas_excel[i]
             safe_write(ws, f'A{fr}', row.get('al',''), mm)
